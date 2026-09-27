@@ -33,10 +33,16 @@ impl JupyterEditService {
 struct ReadNotebookParams {
     #[schemars(description = "Absolute path to .ipynb file")]
     path: String,
-    #[schemars(description = "Maximum number of lines to return (default: 100, set to null for no limit)")]
-    limit: Option<usize>,
+    #[schemars(description = "Maximum number of lines to return (default: 100 when omitted; pass a very large number for full output)")]
+    #[serde(default = "default_read_limit")]
+    limit: usize,
     #[schemars(description = "Number of lines to skip from the beginning (default: 0)")]
-    offset: Option<usize>,
+    #[serde(default)]
+    offset: usize,
+}
+
+fn default_read_limit() -> usize {
+    100
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -99,8 +105,8 @@ impl JupyterEditService {
     async fn read_notebook(&self, params: Parameters<ReadNotebookParams>) -> Result<CallToolResult, McpError> {
         tools::read_notebook(tools::ReadNotebookRequest {
             path: params.0.path,
-            limit: params.0.limit,
-            offset: params.0.offset,
+            limit: Some(params.0.limit),
+            offset: Some(params.0.offset),
         })
             .map(|s| CallToolResult::success(vec![Content::text(s)]))
             .map_err(|e| McpError::invalid_request(e.to_string(), None))
