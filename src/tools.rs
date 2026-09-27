@@ -80,19 +80,24 @@ pub fn list_cells(req: ListCellsRequest) -> Result<Vec<CellInfo>> {
         .enumerate()
         .map(|(index, cell)| {
             let source = cell.source.as_string();
-            let preview = if source.len() > 100 {
-                format!("{}...", &source[..100])
-            } else {
-                source
-            };
             CellInfo {
                 id: cell.id.clone(),
                 cell_type: cell.cell_type.to_string().to_lowercase(),
                 index,
-                source_preview: preview,
+                source_preview: char_preview(&source, 100),
             }
         })
         .collect())
+}
+
+/// Truncate to `max_chars` characters (not bytes): byte-slicing UTF-8
+/// panics on multi-byte chars (accents, emoji) and kills the server.
+fn char_preview(source: &str, max_chars: usize) -> String {
+    if source.chars().count() > max_chars {
+        format!("{}...", source.chars().take(max_chars).collect::<String>())
+    } else {
+        source.to_string()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -211,4 +216,16 @@ pub fn delete_cell(req: DeleteCellRequest) -> Result<String> {
         req.cell_id,
         removed.cell_type.to_string().to_lowercase()
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::char_preview;
+
+    #[test]
+    fn preview_keeps_char_boundary() {
+        // 'ñ' is 2 bytes: byte-slicing here would panic, char-slicing must not.
+        assert_eq!(char_preview("tamaño del embedding: ✅ datos", 10), "tamaño del...");
+        assert_eq!(char_preview("abc", 100), "abc");
+    }
 }

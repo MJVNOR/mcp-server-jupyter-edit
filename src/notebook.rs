@@ -62,9 +62,7 @@ pub struct Cell {
     pub cell_type: CellType,
     pub source: CellSource,
     pub metadata: CellMetadata,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub outputs: Option<Vec<Output>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_count: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<serde_json::Value>,

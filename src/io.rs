@@ -23,6 +23,30 @@ pub fn write_notebook_file<P: AsRef<Path>>(path: P, notebook: &Notebook) -> Resu
     let path = path.as_ref();
     debug!("Writing notebook to: {}", path.display());
 
+    // Resolve to an absolute path so backup/temp/rename don't depend on the
+    // process working directory (e.g. WSL-style paths served from a UNC cwd).
+    let abs_path: PathBuf = if path.exists() {
+        fs::canonicalize(path)
+            .with_context(|| format!("Cannot resolve absolute path for: {}", path.display()))?
+    } else if let Some(parent) = path.parent() {
+        if parent.as_os_str().is_empty() {
+            std::env::current_dir()
+                .context("Cannot determine current directory")?
+                .join(path)
+        } else {
+            let abs_parent = fs::canonicalize(parent).with_context(|| {
+                format!("Directory does not exist: {}", parent.display())
+            })?;
+            match path.file_name() {
+                Some(name) => abs_parent.join(name),
+                None => path.to_path_buf(),
+            }
+        }
+    } else {
+        path.to_path_buf()
+    };
+    let path = abs_path.as_path();
+
     if let Some(parent) = path.parent() {
         if !parent.exists() {
             anyhow::bail!("Directory does not exist: {}", parent.display());
@@ -36,7 +60,9 @@ pub fn write_notebook_file<P: AsRef<Path>>(path: P, notebook: &Notebook) -> Resu
     let content = serde_json::to_string_pretty(notebook)
         .context("Failed to serialize notebook to JSON")?;
 
-    let temp_path = path.with_extension("ipynb.tmp");
+    // Unique temp name: concurrent writes to the same notebook must not share it.
+    let temp_path =
+        path.with_extension(format!("ipynb.tmp-{}", uuid::Uuid::new_v4().simple()));
     fs::write(&temp_path, content)
         .with_context(|| format!("Cannot write temporary file: {}", temp_path.display()))?;
 
@@ -58,7 +84,7 @@ pub fn backup_notebook<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
     let backup_dir = parent.join(".jupyter-edit-backups");
 
     if !backup_dir.exists() {
-        fs::create_dir(&backup_dir)
+        fs::create_dir_all(&backup_dir)
             .with_context(|| format!("Cannot create backup directory: {}", backup_dir.display()))?;
     }
 
