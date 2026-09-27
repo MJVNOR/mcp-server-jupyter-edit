@@ -167,16 +167,29 @@ fn format_output(output: &Output) -> String {
 fn summarize_data(data: &serde_json::Value) -> String {
     if let Some(obj) = data.as_object() {
         if let Some(text) = obj.get("text/plain") {
-            return truncate(text.as_str().unwrap_or(""), 100);
+            return truncate(&plain_text(text), 100);
         }
         if let Some(html) = obj.get("text/html") {
-            return format!("<html: {} chars>", html.as_str().map(|s| s.len()).unwrap_or(0));
+            return format!("<html: {} chars>", plain_text(html).len());
         }
         if obj.contains_key("image/png") || obj.contains_key("image/jpeg") {
             return "<image data>".to_string();
         }
     }
     "<data>".to_string()
+}
+
+/// nbformat allows mime values as a single string or a list of lines.
+fn plain_text(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(lines) => lines
+            .iter()
+            .filter_map(|l| l.as_str())
+            .collect::<Vec<_>>()
+            .join(""),
+        _ => String::new(),
+    }
 }
 
 fn truncate(s: &str, max_len: usize) -> String {

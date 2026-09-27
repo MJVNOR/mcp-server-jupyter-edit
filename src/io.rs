@@ -19,9 +19,11 @@ pub fn read_notebook_file<P: AsRef<Path>>(path: P) -> Result<Notebook> {
     Ok(notebook)
 }
 
-pub fn write_notebook_file<P: AsRef<Path>>(path: P, notebook: &Notebook) -> Result<()> {
+pub fn write_notebook_file<P: AsRef<Path>>(path: P, notebook: &mut Notebook) -> Result<()> {
     let path = path.as_ref();
     debug!("Writing notebook to: {}", path.display());
+
+    notebook.normalize_outputs();
 
     // Resolve to an absolute path so backup/temp/rename don't depend on the
     // process working directory (e.g. WSL-style paths served from a UNC cwd).

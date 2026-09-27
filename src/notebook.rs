@@ -25,6 +25,16 @@ impl Notebook {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// nbconvert is strict: code cells require `outputs` to be a list
+    /// (`null`/absent fails validation). Normalize before any write.
+    pub fn normalize_outputs(&mut self) {
+        for cell in &mut self.cells {
+            if cell.cell_type == CellType::Code && cell.outputs.is_none() {
+                cell.outputs = Some(Vec::new());
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -62,6 +72,8 @@ pub struct Cell {
     pub cell_type: CellType,
     pub source: CellSource,
     pub metadata: CellMetadata,
+    // nbformat crashes on `"outputs": null` (must be a list or absent).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub outputs: Option<Vec<Output>>,
     pub execution_count: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]

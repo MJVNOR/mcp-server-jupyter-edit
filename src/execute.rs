@@ -22,7 +22,7 @@ fn nbconvert_base_args(path: &str, kernel_name: &Option<String>, allow_errors: b
         "--to".to_string(),
         "notebook".to_string(),
         "--execute".to_string(),
-        "--in-place".to_string(),
+        "--inplace".to_string(),
     ];
     if let Some(k) = kernel_name {
         if !k.trim().is_empty() {
@@ -58,9 +58,11 @@ fn truncate_chars(s: &str, max_chars: usize) -> String {
 }
 
 pub fn execute_notebook(req: ExecuteNotebookRequest) -> Result<String> {
-    // Validate it's a readable notebook before shelling out.
-    let notebook = read_notebook_file(&req.path)?;
+    // Validate it's a readable notebook before shelling out, and normalize
+    // it (code cells require `outputs` to be a list) so nbconvert accepts it.
+    let mut notebook = read_notebook_file(&req.path)?;
     let total = notebook.cells.len();
+    write_notebook_file(&req.path, &mut notebook)?;
 
     let args = nbconvert_base_args(&req.path, &req.kernel_name, req.allow_errors);
     let out = run_jupyter(&args)?;
@@ -69,12 +71,14 @@ pub fn execute_notebook(req: ExecuteNotebookRequest) -> Result<String> {
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
 
     if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
         return Err(anyhow!(
-            "nbconvert failed ({} cells): {}",
+            "nbconvert failed ({} cells): {}\n{}",
             total,
-            truncate_chars(stderr.trim(), 2000)
-        )
-        .context(truncate_chars(stdout.trim(), 500)));
+            truncate_chars(stderr.trim(), 2000),
+            truncate_chars(stdout.trim(), 500)
+        ));
     }
 
     // Re-read to surface per-cell errors without dumping full outputs.
@@ -120,7 +124,7 @@ pub fn execute_cell(req: ExecuteCellRequest) -> Result<String> {
     }
 
     // ponytail: stateless single-cell run (no kernel memory of sibling cells); use execute_notebook or a persistent kernel if state matters.
-    let single = Notebook {
+    let mut single = Notebook {
         nbformat: notebook.nbformat,
         nbformat_minor: notebook.nbformat_minor,
         metadata: notebook.metadata.clone(),
@@ -131,6 +135,7 @@ pub fn execute_cell(req: ExecuteCellRequest) -> Result<String> {
         .suffix(".ipynb")
         .tempfile()
         .context("Cannot create temp notebook file")?;
+    single.normalize_outputs();
     serde_json::to_writer_pretty(tmp.as_file(), &single).context("Cannot write temp notebook")?;
     let tmp_path = tmp.path().to_string_lossy().to_string();
 
@@ -149,7 +154,7 @@ pub fn execute_cell(req: ExecuteCellRequest) -> Result<String> {
 
     notebook.cells[idx].outputs = exec_cell.outputs;
     notebook.cells[idx].execution_count = exec_cell.execution_count;
-    write_notebook_file(&req.path, &notebook)?;
+    write_notebook_file(&req.path, &mut notebook)?;
 
     Ok(format!("Executed cell {} in-place: {}", req.cell_id, req.path))
 }
@@ -161,7 +166,7 @@ mod tests {
     #[test]
     fn args_full_defaults() {
         let args = nbconvert_base_args("a.ipynb", &None, false);
-        assert_eq!(args, vec!["nbconvert", "--to", "notebook", "--execute", "--in-place", "a.ipynb"]);
+        assert_eq!(args, vec!["nbconvert", "--to", "notebook", "--execute", "--inplace", "a.ipynb"]);
     }
 
     #[test]

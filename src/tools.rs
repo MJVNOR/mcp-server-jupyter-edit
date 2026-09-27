@@ -47,8 +47,8 @@ pub fn write_notebook(req: WriteNotebookRequest) -> Result<WriteNotebookResponse
         }
     }
 
-    let (notebook, warnings) = llm_format_to_notebook(&req.content)?;
-    write_notebook_file(&req.path, &notebook)?;
+    let (mut notebook, warnings) = llm_format_to_notebook(&req.content)?;
+    write_notebook_file(&req.path, &mut notebook)?;
 
     Ok(WriteNotebookResponse {
         message: format!("Notebook written successfully to: {}", req.path),
@@ -163,7 +163,7 @@ pub fn add_cell(req: AddCellRequest) -> Result<AddCellResponse> {
     let cell_id = new_cell.id.clone().unwrap();
     
     notebook.cells.insert(insert_index, new_cell);
-    write_notebook_file(&req.path, &notebook)?;
+    write_notebook_file(&req.path, &mut notebook)?;
 
     Ok(AddCellResponse {
         message: format!("Cell added successfully with ID: {}", cell_id),
@@ -188,7 +188,7 @@ pub fn update_cell(req: UpdateCellRequest) -> Result<String> {
         .ok_or_else(|| anyhow!("Cell not found with ID: {}", req.cell_id))?;
 
     cell.source = crate::notebook::CellSource::Single(req.content);
-    write_notebook_file(&req.path, &notebook)?;
+    write_notebook_file(&req.path, &mut notebook)?;
 
     Ok(format!("Cell updated successfully: {}", req.cell_id))
 }
@@ -209,7 +209,7 @@ pub fn delete_cell(req: DeleteCellRequest) -> Result<String> {
         .ok_or_else(|| anyhow!("Cell not found with ID: {}", req.cell_id))?;
 
     let removed = notebook.cells.remove(index);
-    write_notebook_file(&req.path, &notebook)?;
+    write_notebook_file(&req.path, &mut notebook)?;
 
     Ok(format!(
         "Cell deleted successfully: {} (type: {})",
