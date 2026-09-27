@@ -15,6 +15,7 @@ mod notebook;
 mod format;
 mod io;
 mod tools;
+mod execute;
 
 #[derive(Clone)]
 struct JupyterEditService {
@@ -99,6 +100,27 @@ struct DeleteCellParams {
     cell_id: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct ExecuteNotebookParams {
+    #[schemars(description = "Absolute path to .ipynb file (executed in-place)")]
+    path: String,
+    #[schemars(description = "Kernel name override (default: notebook metadata)")]
+    kernel_name: Option<String>,
+    #[schemars(description = "Continue past cell errors and store them in outputs (default: false)")]
+    #[serde(default)]
+    allow_errors: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct ExecuteCellParams {
+    #[schemars(description = "Absolute path to .ipynb file (cell outputs written in-place)")]
+    path: String,
+    #[schemars(description = "Cell ID to execute (code cells only, stateless: no access to other cells)")]
+    cell_id: String,
+    #[schemars(description = "Kernel name override (default: notebook metadata)")]
+    kernel_name: Option<String>,
+}
+
 #[tool_router]
 impl JupyterEditService {
     #[tool(description = "Read a Jupyter notebook and convert to LLM-friendly markdown format")]
@@ -181,6 +203,28 @@ impl JupyterEditService {
         .map(|s| CallToolResult::success(vec![Content::text(s)]))
         .map_err(|e| McpError::invalid_request(e.to_string(), None))
     }
+
+    #[tool(description = "Execute a whole notebook in-place via 'jupyter nbconvert --execute' and return a short summary")]
+    async fn execute_notebook(&self, params: Parameters<ExecuteNotebookParams>) -> Result<CallToolResult, McpError> {
+        execute::execute_notebook(execute::ExecuteNotebookRequest {
+            path: params.0.path,
+            kernel_name: params.0.kernel_name,
+            allow_errors: params.0.allow_errors,
+        })
+        .map(|s| CallToolResult::success(vec![Content::text(s)]))
+        .map_err(|e| McpError::invalid_request(e.to_string(), None))
+    }
+
+    #[tool(description = "Execute a single code cell statelessly via nbconvert and write its outputs back in-place")]
+    async fn execute_cell(&self, params: Parameters<ExecuteCellParams>) -> Result<CallToolResult, McpError> {
+        execute::execute_cell(execute::ExecuteCellRequest {
+            path: params.0.path,
+            cell_id: params.0.cell_id,
+            kernel_name: params.0.kernel_name,
+        })
+        .map(|s| CallToolResult::success(vec![Content::text(s)]))
+        .map_err(|e| McpError::invalid_request(e.to_string(), None))
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -191,8 +235,10 @@ impl ServerHandler for JupyterEditService {
                 "Provides tools for reading and editing Jupyter notebooks (.ipynb files). \
                  Use read_notebook to get the full notebook content, write_notebook to create or update \
                  entire notebooks, list_cells to see all cells, get_cell to read a specific cell, \
-                 add_cell to insert new cells, update_cell to modify cell content, and delete_cell \
-                 to remove cells by ID. NEVER use default Read tool of your harness as it bloats your context"
+                 add_cell to insert new cells, update_cell to modify cell content, delete_cell \
+                 to remove cells by ID, execute_notebook to run the whole notebook in-place via \
+                 'jupyter nbconvert --execute', and execute_cell to run a single code cell \
+                 statelessly and write its outputs back. NEVER use default Read tool of your harness as it bloats your context"
                     .to_string(),
             ),
             capabilities: ServerCapabilities::builder().enable_tools().build(),

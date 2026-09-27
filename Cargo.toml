@@ -17,9 +17,9 @@ schemars = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = "0.4"
 regex = "1"
+tempfile = "3"
 
 [dev-dependencies]
-tempfile = "3"
 
 [[bin]]
 name = "mcp-server-jupyter-edit"

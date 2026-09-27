@@ -56,3 +56,7 @@ Retrieve the binary from `./target/release`
 | `add_cell` | Add new cell |
 | `update_cell` | Update cell source |
 | `delete_cell` | Delete cell by ID |
+| `execute_notebook` | Execute whole notebook in-place via `jupyter nbconvert --execute` |
+| `execute_cell` | Execute single code cell statelessly, outputs written back in-place |
+
+Requires `jupyter` + `nbconvert` + a kernel (e.g. `pip install notebook nbconvert ipykernel`) in PATH for the two `execute_*` tools.
