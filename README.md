@@ -38,7 +38,7 @@ Retrieve the binary from `./target/release`
       "type": "local",
       "command": ["/path/to/mcp-server-jupyter-edit"],
       "enabled": true,
-      "timeout": 1000
+      "timeout": 120000
     }
   }
 }
